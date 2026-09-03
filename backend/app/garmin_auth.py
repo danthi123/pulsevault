@@ -62,8 +62,11 @@ def login(email: str, password: str) -> dict[str, Any]:
     requires a one-time code — then call :func:`resume_mfa` with it.
     """
     with _lock:
-        client = Garmin(email=email, password=password, return_on_mfa=True)
-        result = client.login()
+        try:
+            client = Garmin(email=email, password=password, return_on_mfa=True)
+            result = client.login()
+        except Exception as exc:  # noqa: BLE001
+            return {"status": "error", "reason": _friendly(exc)}
         # Newer garminconnect returns a (marker, state) tuple when MFA is needed.
         if isinstance(result, tuple) and result and result[0] == "needs_mfa":
             _pending["client"] = client
@@ -73,14 +76,33 @@ def login(email: str, password: str) -> dict[str, Any]:
         return {"status": "ok"}
 
 
+def _friendly(exc: Exception) -> str:
+    msg = str(exc)
+    low = msg.lower()
+    if "429" in low or "too many" in low or "rate limit" in low:
+        return ("Garmin rate-limited this server's IP (HTTP 429). Wait ~30–60 min "
+                "and try once — repeated attempts extend the block. If it persists, "
+                "use token import (see docs).")
+    if "cloudflare" in low or "403" in low or "bot" in low:
+        return ("Garmin's Cloudflare bot protection blocked the login from this "
+                "server (HTTP 403). Server-IP logins are often gated; use token "
+                "import instead.")
+    if "401" in low or "invalid" in low or "credential" in low:
+        return "Garmin rejected the credentials (check email/password)."
+    return f"Garmin login failed: {msg[:300]}"
+
+
 def resume_mfa(mfa_code: str) -> dict[str, Any]:
     with _lock:
         client = _pending.get("client")
         state = _pending.get("state")
         if client is None:
             return {"status": "error", "reason": "no_pending_login"}
-        client.resume_login(state, mfa_code)
-        client.garth.dump(_token_dir())
+        try:
+            client.resume_login(state, mfa_code)
+            client.garth.dump(_token_dir())
+        except Exception as exc:  # noqa: BLE001
+            return {"status": "error", "reason": _friendly(exc)}
         _pending.clear()
         return {"status": "ok"}
 

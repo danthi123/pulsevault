@@ -25,17 +25,20 @@ export default function Settings() {
   async function doLogin() {
     setBusy(true); setToast(null);
     try {
-      const r = await api.post<{ status: string }>("/api/garmin/login", { email, password });
+      const r = await api.post<{ status: string; reason?: string }>("/api/garmin/login", { email, password });
       if (r.status === "needs_mfa") { setNeedMfa(true); setToast({ ok: true, msg: "Enter the code Garmin just sent you." }); }
-      else { setToast({ ok: true, msg: "Connected to Garmin." }); setPassword(""); refresh(); }
+      else if (r.status === "ok") { setToast({ ok: true, msg: "Connected to Garmin." }); setPassword(""); refresh(); }
+      else { setToast({ ok: false, msg: r.reason || "Garmin login failed." }); }
     } catch (e: any) { setToast({ ok: false, msg: e.message }); } finally { setBusy(false); }
   }
   async function doMfa() {
     setBusy(true);
     try {
-      await api.post("/api/garmin/mfa", { code: mfa });
-      setToast({ ok: true, msg: "Connected to Garmin." });
-      setNeedMfa(false); setPassword(""); setMfa(""); refresh();
+      const r = await api.post<{ status: string; reason?: string }>("/api/garmin/mfa", { code: mfa });
+      if (r.status === "ok") {
+        setToast({ ok: true, msg: "Connected to Garmin." });
+        setNeedMfa(false); setPassword(""); setMfa(""); refresh();
+      } else { setToast({ ok: false, msg: r.reason || "MFA verification failed." }); }
     } catch (e: any) { setToast({ ok: false, msg: e.message }); } finally { setBusy(false); }
   }
   async function sync(days?: number) {
