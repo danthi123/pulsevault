@@ -178,9 +178,12 @@ class FitIngester:
         unix = _to_unix(self._g(frame, "stress_level_time"))
         val = self._g(frame, "stress_level_value")
         if unix is not None and val is not None:
-            # Garmin encodes at-rest/unmeasured windows as negative values; we
-            # keep them (the schema documents value<0 as unmeasured/at-rest).
-            bundle.stress.append({"ts": _dt(unix), "value": int(val)})
+            # Garmin uses negative stress values as sentinels (-1 = no reading,
+            # -2 = too much motion). Real stress is 0..100, so drop the sentinels
+            # rather than store them — otherwise they show up as bogus chart dips.
+            v = int(val)
+            if 0 <= v <= 100:
+                bundle.stress.append({"ts": _dt(unix), "value": v})
 
     def _monitoring(self, frame, bundle, last_unix, step_state):
         unix = _to_unix(self._g(frame, "timestamp"))

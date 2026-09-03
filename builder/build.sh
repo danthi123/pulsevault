@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
-# Assemble the build context (Connect IQ SDK + Fenix 7 device files + watchapp
-# source + signing key — none committed) and build the pulsevault-builder image.
+# Assemble the build context (Connect IQ SDK + full device library — neither is
+# committed, both are large + licensed) and build the pulsevault-builder image.
 # Run from a machine that has the SDK installed under ~/.Garmin/ConnectIQ.
+#
+# The image is SDK-only: the watchapp source + signing key are bind-mounted at
+# runtime, so this only needs rebuilding when the SDK itself changes.
+#
+#   IMAGE=pulsevault-builder ./build.sh          # local tag (default)
+#   IMAGE=ghcr.io/<owner>/pulsevault-builder:latest PUSH=1 ./build.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
+IMAGE="${IMAGE:-pulsevault-builder}"
 CTX="$(mktemp -d)"
 trap 'rm -rf "$CTX"' EXIT
 
@@ -14,11 +21,11 @@ cp -a "$SDK" "$CTX/sdk"
 
 # Full device library so the builder can target any supported model.
 cp -a "$HOME/.Garmin/ConnectIQ/Devices" "$CTX/devices"
-
-mkdir -p "$CTX/watchapp"
-cp -a ../watchapp/source ../watchapp/resources ../watchapp/manifest.xml ../watchapp/monkey.jungle "$CTX/watchapp/"
-cp -a ../watchapp/developer_key.der "$CTX/developer_key.der"
 cp -a Dockerfile server.py "$CTX/"
 
-docker build -t pulsevault-builder "$CTX"
-echo "built image: pulsevault-builder"
+docker build -t "$IMAGE" "$CTX"
+echo "built image: $IMAGE"
+if [ "${PUSH:-0}" = "1" ]; then
+  docker push "$IMAGE"
+  echo "pushed: $IMAGE"
+fi
