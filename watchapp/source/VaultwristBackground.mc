@@ -1,0 +1,35 @@
+// Background service: fires on the temporal schedule (>= 5 min), collects recent
+// metrics, and POSTs them to the server. Web requests relay through the phone's
+// Garmin Connect Mobile connection (or WiFi where available), so this keeps
+// working while your watch stays paired to your iPhone.
+using Toybox.System;
+using Toybox.Background;
+using Toybox.Communications;
+
+(:background)
+class VaultwristBackground extends System.ServiceDelegate {
+
+    function initialize() {
+        ServiceDelegate.initialize();
+    }
+
+    function onTemporalEvent() {
+        var payload = Collector.collect();
+        var url = Config.serverUrl() + "/api/ingest/metrics";
+        var options = {
+            :method => Communications.HTTP_REQUEST_METHOD_POST,
+            :headers => {
+                "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON,
+                "Authorization" => "Bearer " + Config.token()
+            },
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+        };
+        Communications.makeWebRequest(url, payload, options, method(:onResp));
+    }
+
+    function onResp(responseCode as Toybox.Lang.Number, data as Toybox.Lang.Dictionary or Toybox.Lang.String or Toybox.PersistedContent.Iterator or Null) as Void {
+        // Must exit the background process; the value is delivered to
+        // onBackgroundData in the foreground.
+        Background.exit(responseCode);
+    }
+}

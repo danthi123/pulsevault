@@ -1,0 +1,19 @@
+[project]
+name = "pulsevault-companion"
+version = "0.1.0"
+description = "PulseVault desktop companion — syncs a Garmin watch (USB/MTP now, BLE experimental) to a PulseVault server"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+# Bluetooth backend is experimental and optional — USB/folder sync works without it.
+ble = ["bleak>=0.22"]
+
+[project.scripts]
+pulsevault-companion = "pulsevault_companion.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pulsevault_companion*"]

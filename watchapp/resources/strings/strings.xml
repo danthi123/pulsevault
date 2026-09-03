@@ -1,0 +1,6 @@
+<strings>
+    <string id="AppName">Vaultwrist</string>
+    <string id="SettingServerUrl">Server URL (https://…)</string>
+    <string id="SettingToken">Ingest token</string>
+    <string id="SettingInterval">Sync interval (minutes, ≥5)</string>
+</strings>

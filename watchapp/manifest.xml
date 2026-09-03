@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+  Vaultwrist watch app manifest.
+  Add/remove <iq:product> lines for the devices you own. Fenix 7 family listed.
+  minApiLevel 3.2.0 covers SensorHistory Body Battery / SpO2 on the Fenix 7.
+-->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application
+        entry="VaultwristApp"
+        id="3063f94bd1764bc78244d9bf0df03a5d"
+        launcherIcon="@Drawables.LauncherIcon"
+        name="@Strings.AppName"
+        type="watch-app"
+        minApiLevel="3.2.0">
+        <iq:products>
+            <iq:product id="fenix7"/>
+            <iq:product id="fenix7s"/>
+            <iq:product id="fenix7x"/>
+            <iq:product id="fenix7pro"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+            <iq:uses-permission id="SensorHistory"/>
+            <iq:uses-permission id="Background"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>

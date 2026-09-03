@@ -1,0 +1,2 @@
+# Connect IQ build config.
+project.manifest = manifest.xml

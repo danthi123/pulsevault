@@ -1,0 +1,17 @@
+# Single entrypoint: serves the built SPA and reverse-proxies the API.
+# Listens on 8080 inside the container (mapped to PROXY_PORT on the host).
+:8080 {
+	encode gzip
+
+	# API and auth go to the FastAPI backend.
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else is the React single-page app.
+	handle {
+		root * /srv/www
+		try_files {path} /index.html
+		file_server
+	}
+}

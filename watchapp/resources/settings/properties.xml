@@ -1,0 +1,5 @@
+<properties>
+    <property id="serverUrl" type="string"></property>
+    <property id="token" type="string"></property>
+    <property id="intervalMinutes" type="number">5</property>
+</properties>

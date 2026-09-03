@@ -1,0 +1,11 @@
+<settings>
+    <setting propertyKey="@Properties.serverUrl" title="@Strings.SettingServerUrl">
+        <settingConfig type="alphaNumeric"/>
+    </setting>
+    <setting propertyKey="@Properties.token" title="@Strings.SettingToken">
+        <settingConfig type="alphaNumeric"/>
+    </setting>
+    <setting propertyKey="@Properties.intervalMinutes" title="@Strings.SettingInterval">
+        <settingConfig type="numeric" min="5" max="120"/>
+    </setting>
+</settings>

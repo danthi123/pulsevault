@@ -1,0 +1,16 @@
+[Unit]
+Description=PulseVault companion — sync Garmin watch to PulseVault
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust the path if pulsevault-companion isn't on PATH (pipx installs to ~/.local/bin).
+ExecStart=%h/.local/bin/pulsevault-companion run
+Restart=on-failure
+RestartSec=30
+# Config is read from ~/.config/pulsevault-companion/config.toml by default.
+Environment=PV_CONFIG=%h/.config/pulsevault-companion/config.toml
+
+[Install]
+WantedBy=default.target
