@@ -6,6 +6,7 @@ out of the per-source ``[sources.*]`` tables.
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,8 +35,17 @@ class Config:
         return d / "state.json"
 
 
+def _exe_dir_config() -> str:
+    # When packaged as a PyInstaller binary, look for config.toml next to the exe
+    # (so the downloaded zip's config.toml is picked up automatically).
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(sys.executable), "config.toml")
+    return ""
+
+
 DEFAULT_PATHS = [
     os.environ.get("PV_CONFIG", ""),
+    _exe_dir_config(),
     os.path.join(os.getcwd(), "config.toml"),
     os.path.join(os.path.expanduser("~"), ".config", "pulsevault-companion", "config.toml"),
 ]

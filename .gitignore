@@ -26,3 +26,9 @@ watchapp/developer_key.der
 .DS_Store
 .idea/
 .vscode/
+
+# Companion PyInstaller build outputs
+companion/build/
+companion/dist/
+companion/packaging/pulsevault-companion*
+*.spec

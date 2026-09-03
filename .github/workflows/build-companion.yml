@@ -1,0 +1,43 @@
+name: build-companion
+
+# Builds standalone PulseVault companion binaries (no Python needed to run):
+# a Linux ELF and a Windows .exe, both PyInstaller one-file. Config is supplied
+# at download time (config.toml next to the binary), so these ship unconfigured.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "companion/**"
+      - ".github/workflows/build-companion.yml"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: companion-linux
+            binname: pulsevault-companion
+          - os: windows-latest
+            artifact: companion-windows
+            binname: pulsevault-companion.exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: companion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install . pyinstaller
+      - run: >
+          pyinstaller --onefile --name pulsevault-companion
+          --exclude-module bleak --collect-submodules pulsevault_companion
+          packaging/entry.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: companion/dist/${{ matrix.binname }}
+          if-no-files-found: error
