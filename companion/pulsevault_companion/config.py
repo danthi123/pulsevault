@@ -13,16 +13,34 @@ from pathlib import Path
 from typing import Any
 
 
+def _base_dir() -> Path:
+    """The folder the app lives in — next to the exe when frozen, else cwd."""
+    if getattr(sys, "frozen", False):
+        return Path(os.path.dirname(sys.executable))
+    return Path.cwd()
+
+
 @dataclass
 class Config:
     server_url: str = "http://localhost:8080"
     token: str = ""
-    poll_interval: int = 300  # seconds between scans
+    poll_interval: int = 60  # seconds between cycles
     verify_tls: bool = True
     log_level: str = "INFO"
     state_file: str = ""  # default computed under the user state dir
-    # Ordered list of source specs, each {"type": "folder"|"mtp"|"ble", ...opts}.
+    # Inbox folder: drained on every cycle — each .fit is uploaded, then DELETED
+    # on success. Default is "FIT" next to the executable.
+    fit_dir: str = ""
+    # Auto-pull new .fit files off the connected watch into the inbox each cycle
+    # (Linux: MTP auto-detect; Windows: experimental; else off).
+    auto_pull: bool = True
+    # Advanced: extra source specs, each {"type": "folder"|"mtp"|"ble", ...opts}.
     sources: list[dict[str, Any]] = field(default_factory=list)
+
+    def resolved_fit_dir(self) -> Path:
+        p = Path(self.fit_dir).expanduser() if self.fit_dir else _base_dir() / "FIT"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
 
     def resolved_state_file(self) -> Path:
         if self.state_file:
@@ -57,7 +75,8 @@ def load(path: str | None = None) -> Config:
     if chosen:
         with open(chosen, "rb") as f:
             data = tomllib.load(f)
-        for key in ("server_url", "token", "poll_interval", "verify_tls", "log_level", "state_file"):
+        for key in ("server_url", "token", "poll_interval", "verify_tls",
+                    "log_level", "state_file", "fit_dir", "auto_pull"):
             if key in data:
                 setattr(cfg, key, data[key])
         cfg.sources = data.get("sources", cfg.sources)
@@ -67,8 +86,4 @@ def load(path: str | None = None) -> Config:
     cfg.token = os.environ.get("PV_TOKEN", cfg.token)
     if os.environ.get("PV_POLL_INTERVAL"):
         cfg.poll_interval = int(os.environ["PV_POLL_INTERVAL"])
-
-    # Sensible default: if no sources configured, try MTP auto-detect.
-    if not cfg.sources:
-        cfg.sources = [{"type": "mtp"}]
     return cfg

@@ -53,20 +53,24 @@ def main(argv: list[str] | None = None) -> int:
     agent = Agent(cfg)
 
     if cmd == "status":
+        from . import inbox
         print(f"server:   {cfg.server_url}")
         print(f"interval: {cfg.poll_interval}s")
+        print(f"inbox:    {agent.fit_dir}  ({len(inbox.fit_files(agent.fit_dir))} .fit waiting)")
         print(f"state:    {cfg.resolved_state_file()}")
-        for s in agent.sources:
+        if agent.puller is not None:
             try:
-                seen = s.available()
+                seen = agent.puller.available()
             except Exception as exc:  # noqa: BLE001
                 seen = f"error: {exc}"
-            print(f"source {s.name}: {'watch detected' if seen is True else seen}")
+            print(f"auto-pull ({agent.puller.name}): {'watch detected' if seen is True else seen}")
+        else:
+            print("auto-pull: off")
         return 0
 
     if cmd == "once":
-        n = agent.sync_once()
-        print(f"uploaded {n} file(s)")
+        pulled, uploaded = agent.cycle()
+        print(f"pulled {pulled}, uploaded {uploaded}")
         return 0
 
     agent.run_forever()

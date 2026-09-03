@@ -77,27 +77,17 @@ def watchapp_devices(user: str = Depends(require_auth)):
 _COMPANION_BIN = {"linux": "pulsevault-companion", "windows": "pulsevault-companion.exe"}
 
 
-def _companion_config(target: str, server: str, token: str) -> str:
-    if target == "windows":
-        source = (
-            '# Windows: point this at a folder where you copy the watch\'s FIT files\n'
-            '# (open the Fenix in Explorer -> Internal Storage/GARMIN, copy ACTIVITY +\n'
-            '# MONITOR + SLEEP into this folder). MTP auto-detect is Linux-only for now.\n'
-            '[[sources]]\n'
-            'type = "folder"\n'
-            'path = "C:\\\\Users\\\\Public\\\\PulseVaultFit"\n'
-        )
-    else:
-        source = (
-            '# Linux: auto-detects the watch when plugged in (gvfs MTP mount).\n'
-            '[[sources]]\n'
-            'type = "mtp"\n'
-        )
+def _companion_config(server: str, token: str) -> str:
     return (
         f'server_url = "{server}"\n'
         f'token = "{token}"\n'
-        'poll_interval = 300\n\n'
-        f'{source}'
+        "poll_interval = 60\n\n"
+        '# Inbox folder next to this app. Each cycle every .fit here is uploaded and\n'
+        '# then DELETED on success. Drop files here manually any time.\n'
+        'fit_dir = "FIT"\n\n'
+        '# Copy new .fit off the connected watch into the inbox automatically\n'
+        '# (Linux: works on plug-in; Windows: experimental — see README).\n'
+        "auto_pull = true\n"
     )
 
 
@@ -105,14 +95,23 @@ def _companion_readme(target: str) -> str:
     run = ("Double-click pulsevault-companion.exe (or run it in a terminal)."
            if target == "windows"
            else "chmod +x pulsevault-companion && ./pulsevault-companion")
+    win_note = (
+        "\nWindows note: auto-pulling off the watch over USB is experimental. If it\n"
+        "doesn't pick up your watch, just open the Fenix in Explorer\n"
+        "(Internal Storage > GARMIN) and copy ACTIVITY / MONITOR / SLEEP .fit files\n"
+        "into the FIT folder next to this app — they'll upload and then disappear.\n"
+        if target == "windows" else ""
+    )
     return (
         "PulseVault companion\n"
         "====================\n\n"
-        "Keep this binary and config.toml in the SAME folder, then run it:\n"
+        "Keep the binary, config.toml, and the FIT folder together, then run it:\n"
         f"  {run}\n\n"
-        "config.toml is already filled in with your server URL and token.\n"
-        "It syncs FIT files from your watch to PulseVault (idempotent — safe to\n"
-        "re-run). Use `... once` for a single pass, `... status` to check.\n"
+        "config.toml is already filled in with your server URL + token. The app\n"
+        "watches the FIT folder: any .fit dropped in (or auto-pulled off your watch)\n"
+        "is uploaded to PulseVault and deleted once it lands (idempotent — safe to\n"
+        "re-run). `... once` runs a single cycle, `... status` shows what's detected.\n"
+        f"{win_note}"
     )
 
 
@@ -131,7 +130,7 @@ def companion_download(
     if not os.path.isfile(binpath):
         raise HTTPException(503, "companion binary not available yet (CI build pending)")
 
-    cfg = _companion_config(target, server, get_ingest_token())
+    cfg = _companion_config(server, get_ingest_token())
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         info = zipfile.ZipInfo(binname)
@@ -140,6 +139,9 @@ def companion_download(
             z.writestr(info, f.read())
         z.writestr("config.toml", cfg)
         z.writestr("README.txt", _companion_readme(target))
+        # empty inbox folder + a hint so users see where files go
+        z.writestr("FIT/put-fit-files-here.txt",
+                   "Drop .fit files here (or let auto-pull fill it). They upload, then vanish.\n")
     buf.seek(0)
     return Response(
         content=buf.read(),

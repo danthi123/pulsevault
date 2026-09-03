@@ -1,37 +1,20 @@
-# PulseVault companion agent config. Copy to config.toml and edit.
-# Config search order: --config PATH, ./config.toml, ~/.config/pulsevault-companion/config.toml
-# Any value can also be overridden by env vars: PV_SERVER_URL, PV_TOKEN, PV_POLL_INTERVAL.
+# PulseVault companion config. Copy to config.toml (kept next to the binary).
+# Env overrides: PV_SERVER_URL, PV_TOKEN, PV_POLL_INTERVAL, PV_CONFIG.
 
-# Your PulseVault server (the proxy URL you open in a browser).
-server_url = "http://localhost:8080"
+server_url = "http://localhost:8080"   # your PulseVault server (https in prod)
+token = "PASTE_INGEST_TOKEN_HERE"      # from the web UI: Settings -> Device Sync
+poll_interval = 60                     # seconds between cycles
 
-# Ingest token — copy from the web UI: Settings → Device Sync.
-token = "PASTE_TOKEN_HERE"
+# Inbox folder (relative to the binary). Every .fit here is uploaded and then
+# DELETED on success. Drop files in manually any time.
+fit_dir = "FIT"
 
-# Seconds between scans for the watch.
-poll_interval = 300
+# Auto-pull new .fit off the connected watch into the inbox each cycle
+# (Linux: gvfs MTP auto-detect; Windows: experimental; else off).
+auto_pull = true
 
-verify_tls = true
-log_level = "INFO"
-
-# --- Sources are tried in order. Configure one or more. ---
-
-# 1) MTP (default): auto-detect the Fenix when plugged in and auto-mounted.
-#    On a Linux desktop this Just Works. Headless or non-gvfs? Mount with
-#    jmtpfs/go-mtpfs and point mount_globs at it.
-[[sources]]
-type = "mtp"
-# mount_globs = ["/run/user/1000/gvfs/*"]   # override if auto-detect misses it
-# max_depth = 4
-
-# 2) Folder: watch any directory tree for .fit files. Great for Windows
-#    (copy from Explorer), MSC watches, or a Syncthing/Nextcloud folder.
+# Advanced: extra pull sources (folder trees / explicit MTP mounts) also feed
+# the inbox. Usually not needed.
 # [[sources]]
 # type = "folder"
-# path = "~/Sync/garmin-fit"
-
-# 3) BLE (experimental — not syncing yet). See `pulsevault-companion ble-probe`.
-# [[sources]]
-# type = "ble"
-# enabled = true
-# address = "XX:XX:XX:XX:XX:XX"   # optional; auto-scans by name otherwise
+# path = "~/somewhere/with/fit/files"

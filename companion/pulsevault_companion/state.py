@@ -22,6 +22,9 @@ class State:
     def is_new(self, key: str, size: int) -> bool:
         return self._seen.get(key) != size
 
+    def keys(self):
+        return list(self._seen.keys())
+
     def mark(self, key: str, size: int) -> None:
         self._seen[key] = size
         self._save()
