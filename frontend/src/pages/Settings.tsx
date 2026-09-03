@@ -200,18 +200,29 @@ function DeviceSync() {
 function FitUpload({ onDone }: { onDone: (m: { ok: boolean; msg: string }) => void }) {
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function upload(files: FileList | null) {
     if (!files || !files.length) return;
-    setBusy(true);
+    setBusy(true); setResult(null);
     const form = new FormData();
     Array.from(files).forEach((f) => form.append("files", f));
     try {
-      const r = await api.postForm<{ results: any[] }>("/api/upload/fit", form);
-      const ok = r.results.filter((x) => x.state === "ok").length;
-      onDone({ ok: ok > 0, msg: `Imported ${ok}/${r.results.length} FIT file(s).` });
-    } catch (e: any) { onDone({ ok: false, msg: e.message }); } finally { setBusy(false); }
+      const r = await api.postForm<{ accepted: number; total: number; results: any[] }>("/api/upload/fit", form);
+      const ok = r.accepted ?? r.results.filter((x) => x.state === "ok").length;
+      const total = r.total ?? r.results.length;
+      const errs = r.results.filter((x) => x.state === "error");
+      const msg = errs.length
+        ? `Imported ${ok}/${total}. Failed: ${errs.map((e) => e.file).join(", ")}`
+        : `Imported ${ok}/${total} file(s) — see the Workouts page.`;
+      const m = { ok: ok > 0, msg };
+      setResult(m); onDone(m);
+    } catch (e: any) {
+      const m = { ok: false, msg: e.message };
+      setResult(m); onDone(m);
+    } finally { setBusy(false); }
   }
 
   return (
@@ -225,6 +236,11 @@ function FitUpload({ onDone }: { onDone: (m: { ok: boolean; msg: string }) => vo
         onDrop={(e) => { e.preventDefault(); setOver(false); upload(e.dataTransfer.files); }}>
         {busy ? "Importing…" : "Tap to choose, or drag .fit files here"}
       </div>
+      {result && (
+        <div className={"toast " + (result.ok ? "ok" : "err")} style={{ marginTop: 10, marginBottom: 0 }}>
+          {result.msg}
+        </div>
+      )}
       <input ref={inputRef} type="file" accept=".fit" multiple hidden
         onChange={(e) => upload(e.target.files)} />
     </div>

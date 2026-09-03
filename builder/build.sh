@@ -12,10 +12,8 @@ SDK="$(ls -td "$HOME"/.Garmin/ConnectIQ/Sdks/*/ | head -1)"
 echo "SDK: $SDK"
 cp -a "$SDK" "$CTX/sdk"
 
-mkdir -p "$CTX/devices"
-for d in fenix7 fenix7s fenix7x fenix7pro fenix7pronowifi fenix7spro fenix7xpro fenix7xpronowifi; do
-    cp -a "$HOME/.Garmin/ConnectIQ/Devices/$d" "$CTX/devices/$d"
-done
+# Full device library so the builder can target any supported model.
+cp -a "$HOME/.Garmin/ConnectIQ/Devices" "$CTX/devices"
 
 mkdir -p "$CTX/watchapp"
 cp -a ../watchapp/source ../watchapp/resources ../watchapp/manifest.xml ../watchapp/monkey.jungle "$CTX/watchapp/"

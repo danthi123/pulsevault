@@ -19,13 +19,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 APP_DIR = "/app/watchapp"
 KEY = "/app/developer_key.der"
 MONKEYC = os.environ.get("MONKEYC", "/root/.Garmin/ConnectIQ/Sdks/current/bin/monkeyc")
+DEVICES_DIR = "/root/.Garmin/ConnectIQ/Devices"
 
-ALLOWED_DEVICES = {
-    "fenix7", "fenix7s", "fenix7x",
-    "fenix7pro", "fenix7pronowifi", "fenix7spro", "fenix7xpro", "fenix7xpronowifi",
-}
+_DEVICE_RE = re.compile(r"^[a-z0-9]+$")
 _URL_RE = re.compile(r"^https://[A-Za-z0-9._\-]+(:[0-9]{1,5})?(/[A-Za-z0-9._\-/]*)?$")
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_\-]{8,256}$")
+
+
+def device_ok(device: str) -> bool:
+    # Accept any installed device id (the backend gates which are offered).
+    return bool(_DEVICE_RE.match(device)) and os.path.isdir(os.path.join(DEVICES_DIR, device))
 
 
 def build(device: str, url: str, token: str) -> bytes:
@@ -64,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
         device = (q.get("device") or [""])[0]
         url = (q.get("url") or [""])[0]
         token = (q.get("token") or [""])[0]
-        if device not in ALLOWED_DEVICES:
+        if not device_ok(device):
             return self._send(400, b"unknown device")
         if not _URL_RE.match(url) or not _TOKEN_RE.match(token):
             return self._send(400, b"invalid url/token")

@@ -7,6 +7,7 @@ using Toybox.Communications;
 class VaultwristView extends WatchUi.View {
 
     var _status = "Opening...";
+    var _cursors = null;
 
     function initialize() {
         View.initialize();
@@ -25,7 +26,8 @@ class VaultwristView extends WatchUi.View {
         _status = "Syncing...";
         WatchUi.requestUpdate();
 
-        var payload = Collector.collect();
+        var res = Collector.collect();
+        _cursors = res["cursors"];
         var url = Config.serverUrl() + "/api/ingest/metrics";
         var options = {
             :method => Communications.HTTP_REQUEST_METHOD_POST,
@@ -35,11 +37,16 @@ class VaultwristView extends WatchUi.View {
             },
             :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
         };
-        Communications.makeWebRequest(url, payload, options, method(:onResp));
+        Communications.makeWebRequest(url, res["payload"], options, method(:onResp));
     }
 
     function onResp(responseCode as Toybox.Lang.Number, data as Toybox.Lang.Dictionary or Toybox.Lang.String or Toybox.PersistedContent.Iterator or Null) as Void {
-        _status = (responseCode == 200) ? "Synced OK" : ("HTTP " + responseCode);
+        if (responseCode == 200) {
+            if (_cursors != null) { Collector.commit(_cursors); }
+            _status = "Synced OK";
+        } else {
+            _status = "HTTP " + responseCode;
+        }
         WatchUi.requestUpdate();
     }
 

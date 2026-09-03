@@ -7,6 +7,8 @@ server-side FIT parser + upsert dedupe means re-sending a file is a no-op.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 import urllib.error
 import urllib.parse
@@ -22,12 +24,15 @@ from ..sync import ingest_fit, ingest_metrics
 
 router = APIRouter(prefix="/api", tags=["ingest"])
 
-# Devices the builder (and manifest) support; keep in sync with builder/server.py.
-WATCH_DEVICES = {
-    "fenix7": "Fenix 7", "fenix7s": "Fenix 7S", "fenix7x": "Fenix 7X",
-    "fenix7pro": "Fenix 7 Pro", "fenix7spro": "Fenix 7S Pro", "fenix7xpro": "Fenix 7X Pro",
-    "fenix7pronowifi": "Fenix 7 Pro (no WiFi)", "fenix7xpronowifi": "Fenix 7X Pro (no WiFi)",
-}
+# Offered watch models (id -> display name), generated from the SDK device DB
+# (backend/app/watch_devices.json). These are the models the app compiles for;
+# the builder itself accepts any installed device id.
+_DEV_FILE = os.path.join(os.path.dirname(__file__), "..", "watch_devices.json")
+try:
+    with open(_DEV_FILE, encoding="utf-8") as _f:
+        WATCH_DEVICES: dict[str, str] = json.load(_f)
+except Exception:  # noqa: BLE001
+    WATCH_DEVICES = {}
 _SERVER_RE = re.compile(r"^https://[A-Za-z0-9._\-]+(:[0-9]{1,5})?$")
 
 
