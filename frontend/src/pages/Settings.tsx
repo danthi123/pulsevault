@@ -96,6 +96,8 @@ export default function Settings() {
 
       <FitUpload onDone={(m) => { setToast(m); qc.invalidateQueries(); }} />
 
+      <GarminExportUpload onDone={(m) => { setToast(m); qc.invalidateQueries(); }} />
+
       <div className="card">
         <h3>Last sync</h3>
         <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "var(--text-dim)" }}>
@@ -279,6 +281,59 @@ function FitUpload({ onDone }: { onDone: (m: { ok: boolean; msg: string }) => vo
       )}
       <input ref={inputRef} type="file" accept=".fit" multiple hidden
         onChange={(e) => upload(e.target.files)} />
+    </div>
+  );
+}
+
+function GarminExportUpload({ onDone }: { onDone: (m: { ok: boolean; msg: string }) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function upload(files: FileList | null) {
+    if (!files || !files.length) return;
+    setBusy(true); setResult(null);
+    const form = new FormData();
+    form.append("file", files[0]);
+    try {
+      const r = await api.postForm<{ report: any; stats: any }>("/api/upload/garmin-export", form);
+      const rep = r.report ?? {};
+      const parts = [
+        `${rep.sleep_nights ?? 0} sleep night(s)`,
+        `${rep.daily_summaries ?? 0} daily summar${(rep.daily_summaries ?? 0) === 1 ? "y" : "ies"}`,
+      ];
+      if (rep.fit_files) parts.push(`${rep.fit_files} activity file(s)`);
+      let msg = `Imported ${parts.join(", ")} — see the Sleep page.`;
+      if (rep.unrecognized?.length) {
+        msg += ` (${rep.unrecognized.length} file type(s) not yet mapped)`;
+      }
+      const m = { ok: (rep.sleep_nights || rep.daily_summaries || rep.fit_files) > 0, msg };
+      setResult(m); onDone(m);
+    } catch (e: any) {
+      const m = { ok: false, msg: e.message };
+      setResult(m); onDone(m);
+    } finally { setBusy(false); if (inputRef.current) inputRef.current.value = ""; }
+  }
+
+  return (
+    <div className="card">
+      <h3>Import Garmin Connect export</h3>
+      <p className="muted">
+        Complete history including <strong>sleep</strong>. Request it at garmin.com → Account →{" "}
+        <em>Manage Your Data → Export Your Data</em>; you'll get a <code>.zip</code> by email. Drop the whole
+        zip here — re-importing is safe (deduplicated).
+      </p>
+      <div className="dropzone" onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); upload(e.dataTransfer.files); }}>
+        {busy ? "Importing… (a large export can take a minute)" : "Tap to choose, or drag the export .zip here"}
+      </div>
+      {result && (
+        <div className={"toast " + (result.ok ? "ok" : "err")} style={{ marginTop: 10, marginBottom: 0 }}>
+          {result.msg}
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept=".zip" hidden onChange={(e) => upload(e.target.files)} />
     </div>
   );
 }

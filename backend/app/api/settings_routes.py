@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from .. import garmin_auth
 from ..auth import require_auth
 from ..config import settings
-from ..sync import ingest_fit, last_status, run_garmin_sync
+from ..sync import ingest_fit, ingest_garmin_export, last_status, run_garmin_sync
 
 router = APIRouter(prefix="/api", tags=["settings"], dependencies=[Depends(require_auth)])
 
@@ -72,3 +72,16 @@ async def upload_fit(files: list[UploadFile] = File(...)):
         except Exception as exc:  # noqa: BLE001
             results.append({"state": "error", "file": f.filename, "reason": str(exc)})
     return {"results": results}
+
+
+@router.post("/upload/garmin-export")
+async def upload_garmin_export(file: UploadFile = File(...)):
+    """Import a Garmin Connect account data export (.zip) — full sleep +
+    daily-summary history. Idempotent (re-uploading is a no-op)."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty upload")
+    try:
+        return ingest_garmin_export(data)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"could not parse export: {exc}")

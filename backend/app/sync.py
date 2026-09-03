@@ -67,6 +67,19 @@ def ingest_fit(data: bytes, filename: str) -> dict[str, Any]:
     return {"state": "ok", "file": filename, "stats": stats}
 
 
+def ingest_garmin_export(data: bytes) -> dict[str, Any]:
+    """Persist a Garmin Connect account data export (the "Export Your Data"
+    zip) — full sleep + daily-summary history. Idempotent."""
+    from .ingest.garmin_export import GarminExportIngester
+
+    user_id = get_or_create_user()
+    bundle, report = GarminExportIngester().parse(data)
+    with SessionLocal() as s:
+        stats = persist(s, user_id, bundle)
+    log.info("garmin export ingest: stats=%s report=%s", stats, report)
+    return {"state": "ok", "stats": stats, "report": report}
+
+
 def ingest_metrics(payload: dict) -> dict[str, Any]:
     """Persist a live-metrics push from the on-watch Connect IQ app."""
     user_id = get_or_create_user()
