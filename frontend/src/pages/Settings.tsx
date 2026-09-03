@@ -90,6 +90,8 @@ export default function Settings() {
         )}
       </div>
 
+      <WatchAppInstall onToast={setToast} />
+
       <DeviceSync />
 
       <FitUpload onDone={(m) => { setToast(m); qc.invalidateQueries(); }} />
@@ -106,6 +108,61 @@ export default function Settings() {
         <button className="btn secondary" onClick={() => logout()}>Sign out of PulseVault</button>
       </div>
     </>
+  );
+}
+
+function WatchAppInstall({ onToast }: { onToast: (m: { ok: boolean; msg: string }) => void }) {
+  const { data } = useQuery({
+    queryKey: ["watch-devices"],
+    queryFn: () => api.get<{ devices: Record<string, string> }>("/api/watchapp/devices"),
+  });
+  const devices = data?.devices ?? {};
+  const ids = Object.keys(devices);
+  const [device, setDevice] = useState("fenix7xpro");
+  const [busy, setBusy] = useState(false);
+
+  async function download() {
+    setBusy(true);
+    try {
+      const url = `/api/watchapp/build?device=${encodeURIComponent(device)}&server=${encodeURIComponent(window.location.origin)}`;
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (!res.ok) {
+        let msg = `Build failed (HTTP ${res.status})`;
+        try { msg = (await res.json()).detail || msg; } catch { /* text */ }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Vaultwrist-${device}.prg`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+      onToast({ ok: true, msg: "Watch app built — check your downloads." });
+    } catch (e: any) { onToast({ ok: false, msg: e.message }); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card">
+      <h3>Install on your Garmin watch (Vaultwrist)</h3>
+      <p className="muted">
+        Download a watch app pre-configured for <b>this</b> server — no Garmin phone
+        app or manual setup needed. Pick your watch, download, and copy the <code>.prg</code>
+        into the watch's <code>GARMIN/Apps/</code> folder over USB.
+      </p>
+      <label className="field">Watch model</label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <select className="input" value={ids.includes(device) ? device : ids[0]}
+          onChange={(e) => setDevice(e.target.value)} style={{ flex: 1 }}>
+          {ids.map((id) => <option key={id} value={id}>{devices[id]}</option>)}
+        </select>
+        <button className="btn" disabled={busy || !ids.length} onClick={download}>
+          {busy ? "Building…" : "Download app"}
+        </button>
+      </div>
+      <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+        Then open Vaultwrist on the watch — it syncs immediately, no configuration. Building takes a few seconds.
+      </p>
+    </div>
   );
 }
 

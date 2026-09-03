@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # A static bearer token the agent sends; leave blank to auto-generate at boot.
     ingest_token: str = ""
 
+    # Internal watch-app build service (compiles a pre-configured Vaultwrist .prg).
+    builder_url: str = "http://builder:8080"
+
     # Garmin Connect
     garmin_email: str = ""
     garmin_password: str = ""
