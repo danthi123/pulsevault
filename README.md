@@ -11,13 +11,23 @@ own data** and owns the storage + UI.
 
 ## How data gets in
 
+PulseVault ingests your own data through several complementary paths — no single
+one captures everything, so you layer whichever fit your setup:
+
 | Path | For | How |
 |------|-----|-----|
-| **Garmin Connect pull** | Garmin (e.g. Fenix 7) | The backend polls the Garmin cloud with [`python-garminconnect`](https://github.com/cyberjunky/python-garminconnect) on a schedule, and on demand via a **Sync now** button. Works from any browser because the sync happens server-side — no Bluetooth. |
-| **FIT upload** | Any Garmin device | Drag-and-drop `.fit` files (or plug the watch in via USB and grab them from `GARMIN/ACTIVITY`) on the Settings page. Fully cloud-free. |
+| **Garmin Connect pull** | Complete history incl. sleep | The backend polls the Garmin cloud with [`python-garminconnect`](https://github.com/cyberjunky/python-garminconnect) on a schedule / on demand. (Login is currently Cloudflare-blocked from server IPs — token-import is the workaround.) |
+| **Garmin account export** | One-time full backfill incl. sleep | Upload a "Export Your Data" zip from garmin.com in **Settings → Import Garmin Connect export**. |
+| **FIT upload** | Cloud-free, any Garmin device | Drag `.fit` files (from `GARMIN/{Activity,Monitor,Sleep}`) onto the Settings page. |
+| **USB companion** | Automatic cloud-free backfill | A small desktop app ([`companion/`](companion)) auto-pulls `.fit` off the watch over USB and uploads them. |
+| **On-watch app (Vaultwrist)** | Near-real-time, no phone needed | A Connect IQ app ([`watchapp/`](watchapp)) pushes HR / stress / Body Battery / SpO₂ / respiration straight from the watch over the phone relay **or WiFi**. |
 
-Both paths converge on one normalized schema and **merge idempotently** — re-syncing
-never creates duplicates.
+Every path converges on one normalized schema and **merges idempotently** — re-syncing
+or overlapping paths never creates duplicates.
+
+**→ See [docs/DATA-FLOW.md](docs/DATA-FLOW.md)** for the full coverage matrix, and the
+detail on going **phone-app-free** (what the app + USB combination does and doesn't
+capture, why sleep can't come from the watch app, and how file-pruning works).
 
 ## Quick start
 
@@ -76,8 +86,11 @@ docker compose up --build -d
 
 - `python-garminconnect` is an **unofficial** client; Garmin may rate-limit or
   change endpoints. Keep syncs infrequent (default every 3h).
-- Body Battery and sleep scores come only from the Garmin Connect path (they're
-  not in the public FIT profile).
+- **Sleep** is never available from the on-watch app (Connect IQ has no sleep
+  API) — it comes from FIT files (USB companion), the Garmin account export, or
+  the Garmin Connect pull. Body Battery / stress are Garmin-proprietary and come
+  from the on-watch app or Garmin Connect (only partly in FIT). See
+  [docs/DATA-FLOW.md](docs/DATA-FLOW.md).
 - Single-user by design. Put it behind your own HTTPS/VPN if exposing it.
 
 ## Development (without Docker)

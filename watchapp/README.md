@@ -4,19 +4,30 @@
 metrics — **heart rate, stress, Body Battery, SpO₂, respiration** and today's
 step/calorie totals — to your self-hosted **PulseVault** server. It coexists with
 your normal Garmin/iPhone setup: nothing to unpair, no Garmin account changes.
-Requests relay through the phone's Garmin Connect Mobile connection (or WiFi
-where available).
+Requests relay through the phone's Garmin Connect Mobile connection **or the
+watch's own WiFi** — so it keeps working even if you drop the Garmin phone app
+entirely.
 
 **Why this exists:** it captures the Garmin-proprietary metrics (stress, Body
-Battery) that FIT files and Apple Health don't reliably expose. Use it alongside
-the PulseVault USB companion (which handles full activities/sleep).
+Battery) that FIT files and Apple Health don't reliably expose, in near-real-time.
+Use it alongside the PulseVault USB companion (which handles full activities/sleep).
+See [../docs/DATA-FLOW.md](../docs/DATA-FLOW.md) for how the two combine.
 
 ## What it can and can't do
 
 - ✅ Recent samples of HR / stress / Body Battery / SpO₂ / respiration via
   `Toybox.SensorHistory`, plus today's steps/calories/distance.
-- ❌ Recorded activities, GPS tracks, full sleep sessions, historical database —
-  Connect IQ apps are sandboxed from those. That's what the USB companion is for.
+- ✅ **Survives long offline gaps.** A persistent outbox in Application.Storage
+  captures new samples every run and only clears them on a confirmed push, so
+  being out of WiFi/phone range longer than the short `SensorHistory` buffer no
+  longer loses data (bounded per metric — see `MAX_OUTBOX` in
+  [`source/Collector.mc`](source/Collector.mc)).
+- ✅ **On-device status.** The foreground screen shows the last successful sync
+  ("5m ago" / "never") and the queued sample count — so you can see whether
+  wireless sync is reaching the server without a phone.
+- ❌ Recorded activities, GPS tracks, and **sleep** — Connect IQ is sandboxed from
+  the watch's files and has **no sleep API at all**. Sleep can never come from this
+  app; use the USB companion or Garmin Connect for it.
 
 ## Requirements
 
@@ -52,8 +63,9 @@ make sideload WATCH="/run/user/1000/gvfs/mtp:host=.../Primary"
 ```
 
 Unplug; the app appears in the watch's app/activity list. Open it once — the
-foreground view does an immediate push and shows "Synced OK" or an HTTP error.
-After that the background service pushes every `intervalMinutes` (≥5).
+foreground view does an immediate push and shows "Synced OK" or an HTTP error,
+plus **last sync** and **queued** sample count. After that the background service
+pushes every `intervalMinutes` (≥5), draining the outbox as connectivity allows.
 
 Tip: test in the **Connect IQ simulator** first (`make sim`, then `make run` in
 another terminal) — it can fake sensor data and shows `makeWebRequest` results

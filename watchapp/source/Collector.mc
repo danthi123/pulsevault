@@ -87,13 +87,16 @@ module Collector {
         };
     }
 
-    // Remove the drained (oldest) samples from each metric's outbox after a 200.
+    // Remove the drained (oldest) samples from each metric's outbox after a 200,
+    // and record the successful-push state (for the on-device status view).
     function commit(plan) {
         var keys = plan.keys();
+        var sent = 0;
         for (var i = 0; i < keys.size(); i++) {
             var name = keys[i];
             var take = plan[name];
             if (take == null || take <= 0) { continue; }
+            sent += take;
             var ob = _loadOutbox(name);
             var drop = take * 2;
             if (drop >= ob.size()) {
@@ -103,6 +106,25 @@ module Collector {
             }
             Storage.setValue("ob_" + name, ob);
         }
+        Storage.setValue("last_push_ts", Time.now().value());
+        Storage.setValue("last_push_n", sent);
+    }
+
+    // Total samples still queued in the outbox across all metrics (waiting to
+    // reach the server). Shown on-device so a phone-free user can see sync work.
+    function queued() {
+        var list = _metricList();
+        var total = 0;
+        for (var i = 0; i < list.size(); i++) {
+            total += _loadOutbox(list[i][0]).size() / 2;
+        }
+        return total;
+    }
+
+    // UNIX epoch of the last confirmed push, or 0 if none yet.
+    function lastPushTs() {
+        var v = Storage.getValue("last_push_ts");
+        return (v != null && v instanceof Lang.Number) ? v : 0;
     }
 
     // ---- internals ----

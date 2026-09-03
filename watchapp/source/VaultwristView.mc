@@ -3,6 +3,7 @@
 using Toybox.WatchUi;
 using Toybox.Graphics;
 using Toybox.Communications;
+using Toybox.Time;
 
 class VaultwristView extends WatchUi.View {
 
@@ -50,12 +51,27 @@ class VaultwristView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    // "5m ago" / "2h ago" / "3d ago" / "never" — so a phone-free user can see at
+    // a glance whether wireless sync is actually reaching the server.
+    function _lastSync() {
+        var ts = Collector.lastPushTs();
+        if (ts == 0) { return "never"; }
+        var age = Time.now().value() - ts;
+        if (age < 90) { return "just now"; }
+        if (age < 3600) { return (age / 60) + "m ago"; }
+        if (age < 86400) { return (age / 3600) + "h ago"; }
+        return (age / 86400) + "d ago";
+    }
+
     function onUpdate(dc) {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.clear();
         var cx = dc.getWidth() / 2;
         var cy = dc.getHeight() / 2;
-        dc.drawText(cx, cy - 24, Graphics.FONT_MEDIUM, "Vaultwrist", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(cx, cy + 16, Graphics.FONT_SMALL, _status, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, cy - 46, Graphics.FONT_MEDIUM, "Vaultwrist", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, cy - 10, Graphics.FONT_SMALL, _status, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, cy + 20, Graphics.FONT_XTINY, "Last sync: " + _lastSync(), Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, cy + 42, Graphics.FONT_XTINY, "Queued: " + Collector.queued(), Graphics.TEXT_JUSTIFY_CENTER);
     }
 }
