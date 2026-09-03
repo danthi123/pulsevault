@@ -17,6 +17,11 @@ class VaultwristView extends WatchUi.View {
     }
 
     function _push() {
+        if (!Config.configured()) {
+            _status = "Set URL + token\nin app settings";
+            WatchUi.requestUpdate();
+            return;
+        }
         _status = "Syncing...";
         WatchUi.requestUpdate();
 

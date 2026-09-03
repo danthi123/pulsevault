@@ -14,6 +14,10 @@ class VaultwristBackground extends System.ServiceDelegate {
     }
 
     function onTemporalEvent() {
+        if (!Config.configured()) {
+            Background.exit(0);  // nothing to send until the user configures it
+            return;
+        }
         var payload = Collector.collect();
         var url = Config.serverUrl() + "/api/ingest/metrics";
         var options = {

@@ -1,16 +1,16 @@
 // Config: reads the server URL / token / interval.
-// Values are editable in Garmin Connect Mobile (Settings for this app) via the
-// app-settings below; the DEFAULT_* constants are the fallback if unset. For a
-// personal sideload you can just hard-code the two DEFAULT_* values and skip the
-// on-phone settings entirely.
+// By design NOTHING is baked in — you enter your PulseVault Server URL and
+// Ingest token in the app's settings (Garmin Connect Mobile → this app →
+// Settings, or the Connect IQ simulator's App Settings). The DEFAULT_* values
+// are intentionally blank so no instance/token ships in the binary.
 using Toybox.Application.Properties;
 
 (:background)
 module Config {
-    // NOTE: Connect IQ makeWebRequest generally requires HTTPS. Point this at
-    // your PulseVault server over TLS, reachable from the phone/WiFi.
-    const DEFAULT_SERVER = "https://pulsevault.local";
-    const DEFAULT_TOKEN = "PASTE_INGEST_TOKEN_HERE";
+    // Leave blank — configured per-install via app settings.
+    // (Connect IQ makeWebRequest requires HTTPS; enter an https:// URL.)
+    const DEFAULT_SERVER = "";
+    const DEFAULT_TOKEN = "";
     const DEFAULT_INTERVAL_MIN = 5;
 
     function _str(key, fallback) {
@@ -33,6 +33,11 @@ module Config {
 
     function token() {
         return _str("token", DEFAULT_TOKEN);
+    }
+
+    // True once both a server URL and a token have been provided.
+    function configured() {
+        return serverUrl().length() > 0 && token().length() > 0;
     }
 
     function intervalMinutes() {
