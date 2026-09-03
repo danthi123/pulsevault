@@ -9,6 +9,21 @@ const ICON: Record<string, string> = {
   swimming: "🏊", lap_swimming: "🏊", open_water_swimming: "🏊",
   hiking: "🥾", walking: "🚶", strength_training: "🏋️", cardio: "🤸",
 };
+const LABEL: Record<string, string> = {
+  running: "Run", trail_running: "Trail Run", treadmill_running: "Treadmill Run",
+  cycling: "Ride", road_biking: "Road Ride", mountain_biking: "Mountain Bike",
+  swimming: "Swim", lap_swimming: "Pool Swim", open_water_swimming: "Open Water Swim",
+  hiking: "Hike", walking: "Walk", strength_training: "Strength", cardio: "Cardio",
+};
+const norm = (t?: string | null) => (t || "").toLowerCase().replace(/^sport\./, "");
+const titleCase = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function wTitle(w: WorkoutRow): string {
+  const t = norm(w.activity_type);
+  return w.name || LABEL[t] || (t ? titleCase(t) : "Workout");
+}
+const wIcon = (w: WorkoutRow) => ICON[norm(w.activity_type)] ?? "🏅";
+const wWhen = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 export default function Workouts() {
   const { data, isLoading } = useQuery({
@@ -27,12 +42,8 @@ export default function Workouts() {
           {rows.map((w) => (
             <Link to={`/workouts/${w.id}`} key={w.id} className="workout-row" style={{ color: "inherit" }}>
               <div>
-                <div className="wtype">
-                  {ICON[w.activity_type ?? ""] ?? "🏅"} {w.name || w.activity_type || "Activity"}
-                </div>
-                <div className="wsub">
-                  {new Date(w.start).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                </div>
+                <div className="wtype">{wIcon(w)} {wTitle(w)}</div>
+                <div className="wsub">{wWhen(w.start)}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div>{fmtDistance(w.distance_m)} · {fmtDuration(w.duration_s)}</div>

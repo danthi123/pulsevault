@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Internal watch-app build service (compiles a pre-configured Vaultwrist .prg).
     builder_url: str = "http://builder:8080"
 
+    # Directory holding the prebuilt companion binaries (mounted on the server).
+    companion_dist_dir: str = "/companion-dist"
+
     # Garmin Connect
     garmin_email: str = ""
     garmin_password: str = ""

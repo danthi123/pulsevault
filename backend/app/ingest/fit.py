@@ -153,7 +153,7 @@ class FitIngester:
             ] if len(sessions) > 1 else records
             bundle.workouts.append(WorkoutData(
                 start_ts=start_dt, end_ts=end_dt,
-                name=filename or (atype or "Workout"),
+                name=None,  # let the UI title it from activity_type + date (not the filename)
                 activity_type=atype, duration_s=s["elapsed"],
                 distance_m=s["distance"], calories=s["calories"],
                 avg_hr=s["avg_hr"], max_hr=s["max_hr"],

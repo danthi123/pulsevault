@@ -92,7 +92,7 @@ export default function Settings() {
 
       <WatchAppInstall onToast={setToast} />
 
-      <DeviceSync />
+      <DeviceSync onToast={setToast} />
 
       <FitUpload onDone={(m) => { setToast(m); qc.invalidateQueries(); }} />
 
@@ -166,20 +166,56 @@ function WatchAppInstall({ onToast }: { onToast: (m: { ok: boolean; msg: string 
   );
 }
 
-function DeviceSync() {
+function DeviceSync({ onToast }: { onToast: (m: { ok: boolean; msg: string }) => void }) {
   const { data } = useQuery({
     queryKey: ["device-config"],
     queryFn: () => api.get<{ ingest_token: string; ingest_path: string }>("/api/device/config"),
   });
   const origin = window.location.origin;
   const copy = (t: string) => navigator.clipboard?.writeText(t);
+  const [dling, setDling] = useState<string | null>(null);
+
+  async function download(target: "linux" | "windows") {
+    setDling(target);
+    try {
+      const res = await fetch(`/api/companion/download?target=${target}&server=${encodeURIComponent(origin)}`,
+        { credentials: "same-origin" });
+      if (!res.ok) {
+        let m = `Download failed (HTTP ${res.status})`;
+        try { m = (await res.json()).detail || m; } catch { /* */ }
+        throw new Error(m);
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `pulsevault-companion-${target}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+      onToast({ ok: true, msg: `Companion (${target}) downloaded — extract and run.` });
+    } catch (e: any) { onToast({ ok: false, msg: e.message }); } finally { setDling(null); }
+  }
+
   return (
     <div className="card">
       <h3>Device Sync (companion agent)</h3>
       <p className="muted">
-        The desktop companion pulls FIT files off the watch (USB now, Bluetooth experimental) and
-        pushes them here — no vendor cloud. Paste these into the agent's config.
+        The desktop companion pulls FIT files off the watch and pushes them here — no
+        vendor cloud. Download a build pre-configured for this server, or configure the
+        agent manually with the values below.
       </p>
+      <div className="pill-row">
+        <button className="btn" disabled={dling !== null} onClick={() => download("linux")}>
+          {dling === "linux" ? "Preparing…" : "Download for Linux"}
+        </button>
+        <button className="btn" disabled={dling !== null} onClick={() => download("windows")}>
+          {dling === "windows" ? "Preparing…" : "Download for Windows"}
+        </button>
+      </div>
+      <p className="muted" style={{ fontSize: 12, marginTop: -4 }}>
+        Extract the zip, keep the binary + <code>config.toml</code> together, and run it.
+      </p>
+      <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "14px 0" }} />
+      <p className="muted" style={{ fontSize: 13 }}>Or configure manually:</p>
       <label className="field">Server URL</label>
       <div style={{ display: "flex", gap: 8 }}>
         <input className="input" readOnly value={origin} />

@@ -30,7 +30,9 @@ export default function WorkoutDetail() {
   return (
     <>
       <Link to="/workouts" className="muted">‹ Workouts</Link>
-      <div className="page-title">{w.name || w.activity_type || "Activity"}</div>
+      <div className="page-title">
+        {w.name || (w.activity_type ? w.activity_type.replace(/^sport\./i, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Workout")}
+      </div>
       <div className="tiles">
         <Tile label="Distance" value={fmtDistance(w.distance_m)} />
         <Tile label="Duration" value={fmtDuration(w.duration_s)} />
