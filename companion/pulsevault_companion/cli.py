@@ -60,10 +60,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"state:    {cfg.resolved_state_file()}")
         if agent.puller is not None:
             try:
-                seen = agent.puller.available()
+                if hasattr(agent.puller, "probe"):
+                    seen = agent.puller.probe()
+                else:
+                    seen = "watch detected" if agent.puller.available() else "no watch detected"
             except Exception as exc:  # noqa: BLE001
                 seen = f"error: {exc}"
-            print(f"auto-pull ({agent.puller.name}): {'watch detected' if seen is True else seen}")
+            print(f"auto-pull ({agent.puller.name}): {seen}")
         else:
             print("auto-pull: off")
         return 0
