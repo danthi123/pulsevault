@@ -1,0 +1,19 @@
+# The frontend image serves the built SPA and reverse-proxies /api to the
+# backend, so the whole app is reachable at one upstream (:80). In the deploy
+# stack the central Caddy points at pulsevault-frontend:80; for local dev the
+# frontend is published on a host port.
+:80 {
+	encode gzip
+
+	# API + auth -> FastAPI backend (same compose network, service name `backend`).
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else is the React single-page app (client-side routing).
+	handle {
+		root * /srv/www
+		try_files {path} /index.html
+		file_server
+	}
+}

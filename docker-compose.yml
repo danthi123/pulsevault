@@ -1,6 +1,10 @@
 # PulseVault — self-hosted Garmin/Gadgetbridge-style watch dashboard.
-# One command:  docker compose up --build -d
-# Then open the proxy (default http://localhost:8080).
+# One command:  docker compose up --build -d   → open http://localhost:8080
+#
+# The frontend image serves the SPA and reverse-proxies /api to the backend, so
+# it's the single web entrypoint (no separate proxy container). Deploy behind
+# your own TLS (see the homelab stack's compose.yml + central Caddy for the
+# convention-aligned production layout).
 services:
   db:
     image: postgres:16-alpine
@@ -46,28 +50,11 @@ services:
   frontend:
     build: ./frontend
     restart: unless-stopped
-    # The built static bundle is served by the proxy; this service just holds it.
-    # (Multi-stage build outputs to an nginx-less busybox that the proxy reads via a shared volume.)
-    volumes:
-      - frontend-dist:/dist
-
-  proxy:
-    image: caddy:2-alpine
-    restart: unless-stopped
     depends_on:
       - backend
-      - frontend
     ports:
-      - "${PROXY_PORT:-8080}:8080"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - frontend-dist:/srv/www:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      - "${PROXY_PORT:-8080}:80"
 
 volumes:
   db-data:
   garth-tokens:
-  frontend-dist:
-  caddy-data:
-  caddy-config:
