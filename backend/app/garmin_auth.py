@@ -72,7 +72,7 @@ def login(email: str, password: str) -> dict[str, Any]:
             _pending["client"] = client
             _pending["state"] = result[1]
             return {"status": "needs_mfa"}
-        client.garth.dump(_token_dir())
+        client.client.dump(_token_dir())  # garminconnect 0.3.x exposes the garth client as .client
         return {"status": "ok"}
 
 
@@ -100,7 +100,7 @@ def resume_mfa(mfa_code: str) -> dict[str, Any]:
             return {"status": "error", "reason": "no_pending_login"}
         try:
             client.resume_login(state, mfa_code)
-            client.garth.dump(_token_dir())
+            client.client.dump(_token_dir())  # garminconnect 0.3.x exposes the garth client as .client
         except Exception as exc:  # noqa: BLE001
             return {"status": "error", "reason": _friendly(exc)}
         _pending.clear()
