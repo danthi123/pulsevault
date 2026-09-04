@@ -3,12 +3,25 @@ name: build-companion
 # Builds standalone PulseVault companion binaries (no Python needed to run):
 # a Linux ELF and a Windows .exe, both PyInstaller one-file. Config is supplied
 # at download time (config.toml next to the binary), so these ship unconfigured.
+#
+# On a published GitHub Release they're attached as assets with STABLE names, so
+# the backend image can fetch them at build time from:
+#   https://github.com/<owner>/<repo>/releases/latest/download/pulsevault-companion-linux
+#   https://github.com/<owner>/<repo>/releases/latest/download/pulsevault-companion-windows.exe
+# That makes a fresh `docker compose up -d` fully functional (companion downloads
+# work) with no manual step. Branch pushes still build validation artifacts.
 on:
   workflow_dispatch:
   push:
+    branches: [master, main]
     paths:
       - "companion/**"
       - ".github/workflows/build-companion.yml"
+  release:
+    types: [published]
+
+permissions:
+  contents: write        # attach assets to the release
 
 jobs:
   build:
@@ -19,9 +32,11 @@ jobs:
           - os: ubuntu-latest
             artifact: companion-linux
             binname: pulsevault-companion
+            asset: pulsevault-companion-linux
           - os: windows-latest
             artifact: companion-windows
             binname: pulsevault-companion.exe
+            asset: pulsevault-companion-windows.exe
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -36,8 +51,17 @@ jobs:
           pyinstaller --onefile --name pulsevault-companion
           --exclude-module bleak --collect-submodules pulsevault_companion
           packaging/entry.py
+      # Stable-named copy used as the release asset (basename = asset name).
+      - name: Stage release asset
+        shell: bash
+        run: cp "dist/${{ matrix.binname }}" "dist/${{ matrix.asset }}"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: companion/dist/${{ matrix.binname }}
           if-no-files-found: error
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: companion/dist/${{ matrix.asset }}
