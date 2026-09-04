@@ -77,11 +77,15 @@ foreach ($dev in $pc.Items()) {
   Write-Output ("DEV:" + $dev.Name)
   if (-not $destNs) { continue }
   foreach ($garmin in $garminRoots) {
-    foreach ($subName in $subFolders) {
-      $subItem = $garmin.ParseName($subName)
-      if (-not $subItem) { continue }
-      $items = @($subItem.GetFolder.Items() | Where-Object { $_.Name -match '\.fit$' })
-      Write-Output ("FOUND:" + $subName + ":" + $items.Count)
+    # Iterate GARMIN's children by hand — MTP ParseName() is unreliable for
+    # subfolders, so match Activity/Monitor/Sleep/Metrics by name instead.
+    foreach ($child in $garmin.Items()) {
+      if (-not $child.IsFolder) { continue }
+      $isWanted = $false
+      foreach ($sn in $subFolders) { if ($child.Name -ieq $sn) { $isWanted = $true; break } }
+      if (-not $isWanted) { continue }
+      $items = @($child.GetFolder.Items() | Where-Object { $_.Name -match '\.fit$' })
+      Write-Output ("FOUND:" + $child.Name + ":" + $items.Count)
       foreach ($item in $items) {
         if ($skip.ContainsKey($item.Name)) { Write-Output ("SKIP:" + $item.Name); continue }
         if (Test-Path (Join-Path $Dest $item.Name)) { Write-Output ("SKIP:" + $item.Name); continue }
@@ -165,7 +169,12 @@ class WindowsPuller:
         copied = [ln[3:] for ln in out.splitlines() if ln.startswith("OK:")]
         timeouts = [ln[8:] for ln in out.splitlines() if ln.startswith("TIMEOUT:")]
         pcitems = [ln[7:] for ln in out.splitlines() if ln.startswith("PCITEM:")]
+        found = [ln[6:] for ln in out.splitlines() if ln.startswith("FOUND:")]
+        skipped = [ln[5:] for ln in out.splitlines() if ln.startswith("SKIP:")]
         dest_ok = "DEST:ok" in out
+        if devs and (found or skipped):
+            log.info("auto-pull: folders %s; %d already-synced skipped",
+                     ", ".join(found) or "none", len(skipped))
         if not devs:
             if not dest_ok:
                 log.warning("auto-pull: inbox folder %s didn't resolve as a shell path", dest)
