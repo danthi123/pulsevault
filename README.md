@@ -82,11 +82,14 @@ work we replace with cloud/FIT ingestion). Instead:
 
 Both are optional extras on top of the core dashboard:
 
-- **USB companion** ([`companion/`](companion)) — prebuilt Linux/Windows binaries are
-  produced by GitHub Actions ([`.github/workflows/build-companion.yml`](.github/workflows/build-companion.yml));
-  grab them from the Actions artifacts / a release and drop them in the server's
-  `companion-dist/` so the web UI can hand out a pre-configured download, or run it
-  from source (`pipx install ./companion`). See [companion/README.md](companion/README.md).
+- **USB companion** ([`companion/`](companion)) — the backend image **automatically
+  downloads** the prebuilt Linux/Windows binaries from the latest
+  [GitHub Release](https://github.com/danthi123/pulsevault/releases) at build time
+  (CI builds + attaches them via [`build-companion.yml`](.github/workflows/build-companion.yml)),
+  so the in-app **Download for Linux/Windows** buttons work out of the box after
+  `compose up`. To refresh after a new release: `docker compose build --no-cache backend`.
+  You can also run it from source (`pipx install ./companion`). See
+  [companion/README.md](companion/README.md).
 - **Vaultwrist watch app** ([`watchapp/`](watchapp)) — build the `.prg` with the Garmin
   Connect IQ SDK and sideload it, or wire up the in-repo builder service. See
   [watchapp/README.md](watchapp/README.md).
