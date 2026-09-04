@@ -64,27 +64,44 @@ function Wait-ForFile($dir, $name, $sec) {
   return (Test-Path $path)
 }
 
+Start-Sleep -Milliseconds 800   # let the MTP namespace bind in this process
+
 foreach ($dev in $pc.Items()) { Write-Output ("PCITEM:" + $dev.Name) }
 
+# A folder-ness test that works over MTP (IsFolder is unreliable): try GetFolder.
+function Get-SubFolder($item) {
+  try { $f = $item.GetFolder } catch { return $null }
+  return $f
+}
+
 foreach ($dev in $pc.Items()) {
+  $devFolder = Get-SubFolder $dev
+  if (-not $devFolder) { continue }
   # Find any GARMIN folder among this item's storages (Internal Storage / card).
   $garminRoots = @()
-  foreach ($storage in $dev.GetFolder.Items()) {
-    $g = $storage.GetFolder.ParseName("GARMIN")
-    if ($g) { $garminRoots += ,($g.GetFolder) }
+  foreach ($storage in $devFolder.Items()) {
+    $sf = Get-SubFolder $storage
+    if (-not $sf) { continue }
+    $g = $sf.ParseName("GARMIN")
+    if ($g) {
+      $gf = Get-SubFolder $g
+      if ($gf) { $garminRoots += ,$gf; Write-Output ("STOR:" + $storage.Name) }
+    }
   }
   if ($garminRoots.Count -eq 0) { continue }
   Write-Output ("DEV:" + $dev.Name)
   if (-not $destNs) { continue }
   foreach ($garmin in $garminRoots) {
-    # Iterate GARMIN's children by hand — MTP ParseName() is unreliable for
-    # subfolders, so match Activity/Monitor/Sleep/Metrics by name instead.
-    foreach ($child in $garmin.Items()) {
-      if (-not $child.IsFolder) { continue }
+    $kids = @($garmin.Items())
+    Write-Output ("GCHILDN:" + $kids.Count)
+    foreach ($child in $kids) {
+      Write-Output ("GCHILD:" + $child.Name)   # diagnostic: what MTP actually returns
+      $sub = Get-SubFolder $child
+      if (-not $sub) { continue }
       $isWanted = $false
       foreach ($sn in $subFolders) { if ($child.Name -ieq $sn) { $isWanted = $true; break } }
       if (-not $isWanted) { continue }
-      $items = @($child.GetFolder.Items() | Where-Object { $_.Name -match '\.fit$' })
+      $items = @($sub.Items() | Where-Object { $_.Name -match '\.fit$' })
       Write-Output ("FOUND:" + $child.Name + ":" + $items.Count)
       foreach ($item in $items) {
         if ($skip.ContainsKey($item.Name)) { Write-Output ("SKIP:" + $item.Name); continue }
@@ -171,10 +188,18 @@ class WindowsPuller:
         pcitems = [ln[7:] for ln in out.splitlines() if ln.startswith("PCITEM:")]
         found = [ln[6:] for ln in out.splitlines() if ln.startswith("FOUND:")]
         skipped = [ln[5:] for ln in out.splitlines() if ln.startswith("SKIP:")]
+        gchild = [ln[7:] for ln in out.splitlines() if ln.startswith("GCHILD:")]
+        gchildn = next((ln[8:] for ln in out.splitlines() if ln.startswith("GCHILDN:")), None)
         dest_ok = "DEST:ok" in out
         if devs and (found or skipped):
             log.info("auto-pull: folders %s; %d already-synced skipped",
                      ", ".join(found) or "none", len(skipped))
+        elif devs and not copied:
+            # Watch found but nothing pulled — show what GARMIN actually exposed.
+            log.warning("auto-pull: watch found but no target subfolder read. "
+                        "GARMIN reports %s children: %s",
+                        gchildn if gchildn is not None else "?",
+                        ", ".join(gchild[:60]) or "(none — MTP returned an empty folder)")
         if not devs:
             if not dest_ok:
                 log.warning("auto-pull: inbox folder %s didn't resolve as a shell path", dest)
