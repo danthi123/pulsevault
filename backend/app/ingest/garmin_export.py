@@ -61,14 +61,30 @@ class GarminExportIngester:
             except Exception:  # noqa: BLE001
                 continue
             if low.endswith(".fit"):
+                self._ingest_fit(bundle, name, raw, report)
+            elif low.endswith(".zip"):
+                # Activities ship as .fit inside a nested zip (UploadedFiles_*.zip).
                 try:
-                    self._merge(bundle, FitIngester().parse(raw, name.rsplit("/", 1)[-1]))
-                    report["fit_files"] += 1
-                except Exception as exc:  # noqa: BLE001
-                    report["unrecognized"].append({"file": name, "error": str(exc)[:120]})
+                    inner = zipfile.ZipFile(io.BytesIO(raw))
+                    for iname in inner.namelist():
+                        if iname.lower().endswith(".fit"):
+                            self._ingest_fit(bundle, iname, inner.read(iname), report)
+                except (zipfile.BadZipFile, RuntimeError):
+                    pass  # encrypted/other zips (e.g. ECG) — skip
             elif low.endswith(".json"):
                 self._ingest_json(bundle, name, raw, report)
         return bundle, report
+
+    def _ingest_fit(self, bundle, name, raw, report):
+        try:
+            fb = FitIngester().parse(raw, name.rsplit("/", 1)[-1])
+            # sleepData.json is the authoritative sleep source (has scores); FIT
+            # sleep files would create duplicate nights under a different start_ts.
+            fb.sleep = []
+            self._merge(bundle, fb)
+            report["fit_files"] += 1
+        except Exception as exc:  # noqa: BLE001
+            report["unrecognized"].append({"file": name, "error": str(exc)[:120]})
 
     # ---- JSON dispatch ----
 
@@ -112,10 +128,18 @@ class GarminExportIngester:
         if not (start and end):
             return False
         day = _as_date(dto.get("calendarDate")) or start.date()
+        # Export uses sleepScores.overallScore (a bare int); the live API nests it
+        # as .overall.value — support both.
         scores = dto.get("sleepScores") or {}
-        score = (scores.get("overall") or {}).get("value") if isinstance(scores, dict) else None
+        score = None
+        if isinstance(scores, dict):
+            score = scores.get("overallScore")
+            if score is None and isinstance(scores.get("overall"), dict):
+                score = scores["overall"].get("value")
         if score is None:
             score = _num(dto, "overallSleepScore", "sleepScore")
+        # The export carries no sleepLevels hypnogram (the live pull does), just
+        # the aggregate seconds — so stages stay empty here.
         segs: list[SleepStageSeg] = []
         for lvl in (r.get("sleepLevels") or dto.get("sleepLevels") or []):
             s_ts = _parse_gmt(lvl.get("startGMT")) or _from_ms(lvl.get("startGMT"))
@@ -126,11 +150,15 @@ class GarminExportIngester:
                 stage = SleepStage.unmeasured
             if s_ts and e_ts:
                 segs.append(SleepStageSeg(s_ts, e_ts, stage))
+        deep, light, rem = (_num(dto, "deepSleepSeconds"), _num(dto, "lightSleepSeconds"),
+                            _num(dto, "remSleepSeconds"))
+        total = _num(dto, "sleepTimeSeconds")
+        if total is None and any(v is not None for v in (deep, light, rem)):
+            total = (deep or 0) + (light or 0) + (rem or 0)  # asleep time (excl. awake)
         bundle.sleep.append(SleepSessionData(
             day=day, start_ts=start, end_ts=end,
-            deep_s=_num(dto, "deepSleepSeconds"), light_s=_num(dto, "lightSleepSeconds"),
-            rem_s=_num(dto, "remSleepSeconds"), awake_s=_num(dto, "awakeSleepSeconds"),
-            total_s=_num(dto, "sleepTimeSeconds"), score=score, stages=segs,
+            deep_s=deep, light_s=light, rem_s=rem, awake_s=_num(dto, "awakeSleepSeconds"),
+            total_s=total, score=score, stages=segs,
         ))
         return True
 
@@ -143,7 +171,7 @@ class GarminExportIngester:
             "steps": _num(r, "totalSteps"),
             "distance_m": _num(r, "totalDistanceMeters"),
             "active_seconds": _num(r, "activeSeconds", "highlyActiveSeconds"),
-            "floors": _num(r, "floorsAscended"),
+            "floors": _num(r, "floorsAscended", "floorsAscendedInMeters"),
             "calories": _num(r, "totalKilocalories", "activeKilocalories"),
             "resting_hr": _num(r, "restingHeartRate"),
             "min_hr": _num(r, "minHeartRate"),

@@ -190,13 +190,16 @@ def _persist_sleep(session, user_id, source, sessions_: list[SleepSessionData]) 
             set_={k: getattr(stmt.excluded, k) for k in row if k not in ("user_id", "start_ts")},
         ).returning(models.SleepSession.id)
         session_id = session.execute(stmt).scalar_one()
-        # Replace stage segments wholesale (idempotent).
-        session.execute(
-            delete(models.SleepStageSegment).where(
-                models.SleepStageSegment.session_id == session_id
-            )
-        )
+        # Replace stage segments wholesale — but ONLY when this source actually
+        # carries a hypnogram. A stage-less source (e.g. the Garmin export, which
+        # has aggregate seconds but no sleepLevels) updates the summary fields
+        # without wiping stages a richer source (the live pull) already stored.
         if s.stages:
+            session.execute(
+                delete(models.SleepStageSegment).where(
+                    models.SleepStageSegment.session_id == session_id
+                )
+            )
             session.execute(
                 models.SleepStageSegment.__table__.insert(),
                 [
