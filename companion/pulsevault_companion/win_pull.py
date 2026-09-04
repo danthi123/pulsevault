@@ -164,6 +164,7 @@ class WindowsPuller:
         return "no devices visible under 'This PC' (COM enumeration returned nothing)"
 
     def copy_new(self, dest: Path, state: State) -> int:
+        dest = Path(dest).resolve()  # Shell.Namespace needs an absolute path
         skip = [k.split("/", 1)[1] for k in state.keys() if k.startswith("win/")]
         skip_path = None
         try:
@@ -196,6 +197,9 @@ class WindowsPuller:
                      ", ".join(found) or "none", len(skipped))
         elif devs and not copied:
             # Watch found but nothing pulled — show what GARMIN actually exposed.
+            if not dest_ok:
+                log.warning("auto-pull: inbox path %s didn't resolve as a shell namespace "
+                            "(must be absolute) — cannot copy", dest)
             log.warning("auto-pull: watch found but no target subfolder read. "
                         "GARMIN reports %s children: %s",
                         gchildn if gchildn is not None else "?",

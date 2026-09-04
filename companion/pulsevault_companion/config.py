@@ -38,7 +38,13 @@ class Config:
     sources: list[dict[str, Any]] = field(default_factory=list)
 
     def resolved_fit_dir(self) -> Path:
-        p = Path(self.fit_dir).expanduser() if self.fit_dir else _base_dir() / "FIT"
+        # A relative fit_dir (e.g. the default "FIT") is anchored to the app's own
+        # folder — NOT the process CWD — and always returned ABSOLUTE. Windows'
+        # Shell.Namespace() (used by the MTP auto-pull) returns null for a
+        # relative path, so this must be absolute or auto-pull silently no-ops.
+        raw = Path(self.fit_dir).expanduser() if self.fit_dir else Path("FIT")
+        p = raw if raw.is_absolute() else _base_dir() / raw
+        p = p.resolve()
         p.mkdir(parents=True, exist_ok=True)
         return p
 
