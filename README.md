@@ -16,7 +16,7 @@ one captures everything, so you layer whichever fit your setup:
 
 | Path | For | How |
 |------|-----|-----|
-| **Garmin Connect pull** | Complete history incl. sleep | The backend polls the Garmin cloud with [`python-garminconnect`](https://github.com/cyberjunky/python-garminconnect) on a schedule / on demand. (Login is currently Cloudflare-blocked from server IPs — token-import is the workaround.) |
+| **Garmin Connect pull** | Complete history incl. sleep | The backend polls the Garmin cloud with [`python-garminconnect`](https://github.com/cyberjunky/python-garminconnect) on a schedule / on demand. (Garmin's Cloudflare bot-protection can block logins from some server IPs; if so, use the account-export path below.) |
 | **Garmin account export** | One-time full backfill incl. sleep | Upload a "Export Your Data" zip from garmin.com in **Settings → Import Garmin Connect export**. |
 | **FIT upload** | Cloud-free, any Garmin device | Drag `.fit` files (from `GARMIN/{Activity,Monitor,Sleep}`) onto the Settings page. |
 | **USB companion** | Automatic cloud-free backfill | A small desktop app ([`companion/`](companion)) auto-pulls `.fit` off the watch over USB and uploads them. |
@@ -32,34 +32,37 @@ capture, why sleep can't come from the watch app, and how file-pruning works).
 ## Quick start
 
 ```bash
+git clone https://github.com/danthi123/pulsevault.git && cd pulsevault
 cp .env.example .env
-# edit .env: set APP_PASSWORD, APP_SECRET_KEY (openssl rand -hex 32), POSTGRES_PASSWORD
-docker compose up --build -d
+# edit .env: set APP_PASSWORD, POSTGRES_PASSWORD, and APP_SECRET_KEY (openssl rand -hex 32)
+docker compose up -d          # builds the images on first run
 ```
 
-Open **http://localhost:8080** (change the host port with `PROXY_PORT` in `.env`).
+Open **http://localhost:8080** (change the host port with `PROXY_PORT` in `.env`),
+then sign in with `APP_USERNAME` / `APP_PASSWORD`.
 
-1. Sign in with `APP_USERNAME` / `APP_PASSWORD`.
-2. Go to **Settings → Garmin Connect**, log in once (enter the MFA code if
-   prompted). The password is only used to fetch an auto-refreshing token; it is
-   never stored on disk.
-3. Hit **Backfill 30 days**, then let the scheduler keep it fresh.
-4. Optionally drop `.fit` files in **Settings → Upload FIT files**.
+That's the whole install. **No Garmin account is required** — you can immediately
+drop `.fit` files or a Garmin export into **Settings**. To pull from the cloud:
+
+1. **Settings → Garmin Connect**, log in once (enter the MFA code if prompted).
+   The password only seeds an auto-refreshing token; it is never stored on disk.
+2. Hit **Backfill 30 days**, then let the scheduler keep it fresh.
 
 ## Architecture
 
 ```
-Browser ──▶ Caddy (proxy, :8080) ──▶ FastAPI backend ──▶ Postgres
-                    │                        │
-                    └── serves the React SPA │── python-garminconnect (cloud pull)
-                                             └── fitdecode (FIT upload)
+Browser ─▶ frontend  ─▶ FastAPI backend ─▶ Postgres
+           (Caddy:        │
+            SPA + /api     ├─ python-garminconnect  (Garmin pull / export)
+            reverse-proxy) └─ fitdecode             (FIT upload / USB companion / watch app)
 ```
 
-- `backend/` — FastAPI + SQLAlchemy. Ingesters live in `backend/app/ingest/`;
-  each source (Garmin Connect, FIT, and a future Gadgetbridge-SQLite adapter)
-  maps into the shared `IngestBundle` and is persisted by one idempotent upsert.
-- `frontend/` — React + Vite, responsive for phone and desktop.
-- Data model: `backend/app/models.py`.
+- `frontend/` — React + Vite SPA, served by a tiny Caddy that also reverse-proxies
+  `/api` to the backend, so it's the single web entrypoint (behind your own TLS).
+- `backend/` — FastAPI + SQLAlchemy. Ingesters in `backend/app/ingest/` each map a
+  source (Garmin Connect JSON, Garmin export, FIT, on-watch metrics) into the shared
+  `IngestBundle`, persisted by one idempotent upsert. Data model: `backend/app/models.py`.
+- `watchapp/` — the Vaultwrist Connect IQ app. `companion/` — the desktop USB agent.
 
 ## Following Gadgetbridge upstream
 
@@ -74,6 +77,21 @@ work we replace with cloud/FIT ingestion). Instead:
 - To ingest data from an Android phone running the real Gadgetbridge later, add
   `ingest/gadgetbridge.py` that reads its SQLite export into an `IngestBundle`.
   No schema or UI changes required.
+
+## Optional: companion agent & watch app
+
+Both are optional extras on top of the core dashboard:
+
+- **USB companion** ([`companion/`](companion)) — prebuilt Linux/Windows binaries are
+  produced by GitHub Actions ([`.github/workflows/build-companion.yml`](.github/workflows/build-companion.yml));
+  grab them from the Actions artifacts / a release and drop them in the server's
+  `companion-dist/` so the web UI can hand out a pre-configured download, or run it
+  from source (`pipx install ./companion`). See [companion/README.md](companion/README.md).
+- **Vaultwrist watch app** ([`watchapp/`](watchapp)) — build the `.prg` with the Garmin
+  Connect IQ SDK and sideload it, or wire up the in-repo builder service. See
+  [watchapp/README.md](watchapp/README.md).
+
+Neither is needed for the Garmin-cloud, export, or FIT-upload paths.
 
 ## Updating the stack
 
