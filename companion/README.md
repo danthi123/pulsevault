@@ -94,6 +94,11 @@ on native Linux + Windows runners with PyInstaller, then dropped into the server
 
 ## Notes / limitations
 
+- **The server must be reachable over HTTPS.** The web UI only generates a
+  companion download for an `https://` origin (and the agent uploads over TLS),
+  so a purely-local `http://localhost` instance can't hand out a companion bundle
+  until it's behind TLS (a reverse proxy with a real cert). Same requirement as
+  the on-watch app. The dashboard + FIT/export upload work fine over plain http.
 - The Fenix 7 is **MTP**, not a USB drive. On Linux your desktop auto-mounts it
   (gvfs); if not, mount with `jmtpfs`/`go-mtpfs`.
 - Windows MTP `CopyHere` is asynchronous; the puller waits for each copy to finish

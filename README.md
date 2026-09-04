@@ -113,6 +113,10 @@ docker compose up --build -d
   from the on-watch app or Garmin Connect (only partly in FIT). See
   [docs/DATA-FLOW.md](docs/DATA-FLOW.md).
 - Single-user by design. Put it behind your own HTTPS/VPN if exposing it.
+- The **companion download and the on-watch app require the server over HTTPS**
+  (TLS) — a plain `http://localhost` instance runs the full dashboard + FIT/export
+  upload, but can't hand out a companion bundle or feed the watch app until it's
+  behind a reverse proxy with a real cert.
 
 ## Development (without Docker)
 
