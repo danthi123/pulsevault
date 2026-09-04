@@ -192,31 +192,31 @@ class WindowsPuller:
         gchild = [ln[7:] for ln in out.splitlines() if ln.startswith("GCHILD:")]
         gchildn = next((ln[8:] for ln in out.splitlines() if ln.startswith("GCHILDN:")), None)
         dest_ok = "DEST:ok" in out
-        if devs and (found or skipped):
-            log.info("auto-pull: folders %s; %d already-synced skipped",
-                     ", ".join(found) or "none", len(skipped))
-        elif devs and not copied:
-            # Watch found but nothing pulled — show what GARMIN actually exposed.
+        if not devs:
+            if not dest_ok:
+                log.warning("auto-pull: inbox folder %s didn't resolve as a shell path "
+                            "(must be absolute)", dest)
+            if pcitems:
+                log.info("auto-pull: no watch found (no GARMIN folder). 'This PC' shows: %s "
+                         "— make sure the Fenix is UNLOCKED and in send-files (MTP) mode, "
+                         "not charge-only.", ", ".join(pcitems))
+            else:
+                log.info("auto-pull: no devices visible under 'This PC' at all")
+        elif copied or timeouts:
+            log.info("auto-pull: %s — copied %d, timed out %d",
+                     ", ".join(devs), len(copied), len(timeouts))
+        elif found or skipped:
+            log.info("auto-pull: %s — up to date (%d already synced, nothing new)",
+                     ", ".join(devs), len(skipped))
+        else:
+            # Device present but GARMIN/subfolders unreadable — the interesting failure.
             if not dest_ok:
                 log.warning("auto-pull: inbox path %s didn't resolve as a shell namespace "
                             "(must be absolute) — cannot copy", dest)
-            log.warning("auto-pull: watch found but no target subfolder read. "
-                        "GARMIN reports %s children: %s",
+            log.warning("auto-pull: %s found but no target subfolder read. "
+                        "GARMIN reports %s children: %s", ", ".join(devs),
                         gchildn if gchildn is not None else "?",
                         ", ".join(gchild[:60]) or "(none — MTP returned an empty folder)")
-        if not devs:
-            if not dest_ok:
-                log.warning("auto-pull: inbox folder %s didn't resolve as a shell path", dest)
-            if pcitems:
-                log.info("auto-pull: no watch found (no GARMIN folder). 'This PC' shows: %s",
-                         ", ".join(pcitems))
-                log.info("auto-pull: make sure the Fenix is UNLOCKED and set to send files (MTP), "
-                         "not charge-only — then it appears here with a GARMIN folder.")
-            else:
-                log.info("auto-pull: no devices visible under 'This PC' at all")
-        else:
-            log.info("auto-pull: device(s) %s — copied %d, timed out %d",
-                     ", ".join(devs), len(copied), len(timeouts))
         if timeouts:
             log.warning("auto-pull: %d file(s) didn't finish copying (MTP slow/busy): %s",
                         len(timeouts), ", ".join(timeouts[:5]))
