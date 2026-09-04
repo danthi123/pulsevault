@@ -138,11 +138,23 @@ class GarminConnectIngester:
 
     def _spo2(self, bundle, day, cdate):
         sp = self.client.get_spo2_data(cdate) or {}
-        arr = sp.get("spO2ValuesArray") or sp.get("spo2ValuesArray") or []
-        for pair in arr:
-            ts = _from_ms(pair[0])
-            if ts and pair[1] is not None:
-                bundle.spo2.append({"ts": ts, "value": int(pair[1])})
+        # Key/shape drifts by API version: modern is spO2SingleValues /
+        # continuousReadingDTOList (list of [ts, value] pairs OR dicts); older
+        # was spO2ValuesArray. Pulse-ox is often disabled, so this is frequently
+        # empty — that's genuinely "no data", not a bug.
+        arr = (sp.get("spO2SingleValues") or sp.get("continuousReadingDTOList")
+               or sp.get("spO2ValuesArray") or sp.get("spo2ValuesArray") or [])
+        for item in arr:
+            if isinstance(item, dict):
+                ts = _from_ms(item.get("epochTimestamp") or item.get("timestamp")) \
+                    or _parse_gmt(item.get("startGMT"))
+                val = item.get("spo2Reading") or item.get("value") or item.get("spo2")
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                ts, val = _from_ms(item[0]), item[1]
+            else:
+                continue
+            if ts and val is not None:
+                bundle.spo2.append({"ts": ts, "value": int(val)})
 
     def _respiration(self, bundle, day, cdate):
         rp = self.client.get_respiration_data(cdate) or {}
@@ -215,12 +227,17 @@ class GarminConnectIngester:
             data = self.client.get_body_battery(start_day.isoformat(), end_day.isoformat()) or []
             for day_entry in data:
                 for pair in day_entry.get("bodyBatteryValuesArray") or []:
-                    ts = _from_ms(pair[0])
-                    if not ts or len(pair) < 3 or pair[2] is None:
+                    if not pair or len(pair) < 2:
                         continue
-                    bundle.body_battery.append({
-                        "ts": ts, "level": int(pair[2]), "status": pair[1],
-                    })
+                    ts = _from_ms(pair[0])
+                    # Current API: [ts, level]. Older: [ts, status, level].
+                    if len(pair) >= 3:
+                        level, status = pair[2], pair[1]
+                    else:
+                        level, status = pair[1], None
+                    if ts is None or level is None:
+                        continue
+                    bundle.body_battery.append({"ts": ts, "level": int(level), "status": status})
         except Exception as exc:  # noqa: BLE001
             log.warning("garmin body_battery failed: %s", exc)
 
