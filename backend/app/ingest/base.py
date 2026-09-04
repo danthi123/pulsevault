@@ -105,6 +105,15 @@ def _insert_stmt(dialect: Dialect):
 def _upsert(session: Session, model, rows: list[dict], conflict_cols: list[str]) -> int:
     if not rows:
         return 0
+    # Dedup within this batch by the conflict key (keep last). A single
+    # INSERT ... ON CONFLICT DO UPDATE cannot affect the same row twice, and
+    # overlapping source files (e.g. many monitoring FITs covering the same
+    # minute) legitimately carry duplicate timestamps.
+    if len(rows) > 1:
+        deduped: dict[tuple, dict] = {}
+        for r in rows:
+            deduped[tuple(r.get(c) for c in conflict_cols)] = r
+        rows = list(deduped.values())
     insert = _insert_stmt(session.bind.dialect)
     table_cols = {c.name for c in model.__table__.columns}
     update_cols = [c for c in rows[0].keys() if c not in conflict_cols and c in table_cols]
