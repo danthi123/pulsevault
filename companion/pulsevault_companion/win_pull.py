@@ -23,11 +23,17 @@ from .state import State
 log = logging.getLogger("pulsevault.pull.win")
 
 # Emits machine-readable lines:
-#   DEV:<name>            a matching device was found
+#   DEST:ok|null          whether the inbox folder resolved as a shell namespace
+#   PCITEM:<name>         every item under "This PC" (so we can see what's visible)
+#   DEV:<name>            an item that actually contains a GARMIN folder (= a watch)
 #   FOUND:<folder>:<n>    n .fit files seen in a GARMIN subfolder
 #   OK:<name>             file copied + verified into the inbox
 #   TIMEOUT:<name>        copy issued but file never finished
 #   SKIP:<name>           already in inbox / skip list
+#
+# Detection is regex-FREE: any "This PC" item that has a GARMIN folder in one of
+# its storages is treated as the watch. (A name filter was too fragile — this is
+# what the standalone report script did, and it worked.)
 _PS = r"""
 param([Parameter(Mandatory=$true)][string]$Dest,
       [Parameter(Mandatory=$true)][string]$SkipFile,
@@ -38,11 +44,10 @@ $skip = @{}
 if (Test-Path $SkipFile) { Get-Content $SkipFile | ForEach-Object { if ($_ -ne "") { $skip[$_] = $true } } }
 
 $shell = New-Object -ComObject Shell.Application
-$destNs = $shell.Namespace($Dest)
-if (-not $destNs) { Write-Output "ERR:no-dest"; exit 0 }
+$destNs = $shell.Namespace("$Dest")
+if ($destNs) { Write-Output "DEST:ok" } else { Write-Output "DEST:null" }
 
 $pc = $shell.Namespace(0x11)   # This PC
-$rx = 'garmin|fenix|epix|forerunner|instinct|venu|enduro|marq|descent|vivoactive|d2|tactix|approach'
 $subFolders = @("Activity","Monitor","Sleep","Metrics")
 
 function Wait-ForFile($dir, $name, $sec) {
@@ -59,16 +64,23 @@ function Wait-ForFile($dir, $name, $sec) {
   return (Test-Path $path)
 }
 
+foreach ($dev in $pc.Items()) { Write-Output ("PCITEM:" + $dev.Name) }
+
 foreach ($dev in $pc.Items()) {
-  if ($dev.Name -notmatch $rx) { continue }
+  # Find any GARMIN folder among this item's storages (Internal Storage / card).
+  $garminRoots = @()
+  foreach ($storage in $dev.GetFolder.Items()) {
+    $g = $storage.GetFolder.ParseName("GARMIN")
+    if ($g) { $garminRoots += ,($g.GetFolder) }
+  }
+  if ($garminRoots.Count -eq 0) { continue }
   Write-Output ("DEV:" + $dev.Name)
-  foreach ($storage in $dev.GetFolder.Items()) {          # Internal Storage / card
-    $garmin = $storage.GetFolder.ParseName("GARMIN")
-    if (-not $garmin) { continue }
+  if (-not $destNs) { continue }
+  foreach ($garmin in $garminRoots) {
     foreach ($subName in $subFolders) {
-      $sub = $garmin.GetFolder.ParseName($subName)
-      if (-not $sub) { continue }
-      $items = @($sub.GetFolder.Items() | Where-Object { $_.Name -match '\.fit$' })
+      $subItem = $garmin.ParseName($subName)
+      if (-not $subItem) { continue }
+      $items = @($subItem.GetFolder.Items() | Where-Object { $_.Name -match '\.fit$' })
       Write-Output ("FOUND:" + $subName + ":" + $items.Count)
       foreach ($item in $items) {
         if ($skip.ContainsKey($item.Name)) { Write-Output ("SKIP:" + $item.Name); continue }
@@ -118,11 +130,17 @@ class WindowsPuller:
             proc = _run_ps([str(Path(tempfile.gettempdir())), str(empty), "0"], timeout=60)
         except Exception as exc:  # noqa: BLE001
             return f"probe error: {exc}"
-        devs = [ln[4:] for ln in proc.stdout.splitlines() if ln.startswith("DEV:")]
-        found = [ln[6:] for ln in proc.stdout.splitlines() if ln.startswith("FOUND:")]
-        if not devs:
-            return "no Garmin device detected over USB"
-        return f"watch(es): {', '.join(devs)}; folders: {', '.join(found) or 'none'}"
+        out = proc.stdout or ""
+        devs = [ln[4:] for ln in out.splitlines() if ln.startswith("DEV:")]
+        found = [ln[6:] for ln in out.splitlines() if ln.startswith("FOUND:")]
+        pcitems = [ln[7:] for ln in out.splitlines() if ln.startswith("PCITEM:")]
+        if devs:
+            return f"watch(es): {', '.join(devs)}; folders: {', '.join(found) or 'none'}"
+        if pcitems:
+            return ("no watch (no GARMIN folder found). 'This PC' shows: "
+                    + ", ".join(pcitems)
+                    + "  — make sure the Fenix is unlocked and set to send files/MTP, not charge-only.")
+        return "no devices visible under 'This PC' (COM enumeration returned nothing)"
 
     def copy_new(self, dest: Path, state: State) -> int:
         skip = [k.split("/", 1)[1] for k in state.keys() if k.startswith("win/")]
@@ -146,8 +164,18 @@ class WindowsPuller:
         devs = [ln[4:] for ln in out.splitlines() if ln.startswith("DEV:")]
         copied = [ln[3:] for ln in out.splitlines() if ln.startswith("OK:")]
         timeouts = [ln[8:] for ln in out.splitlines() if ln.startswith("TIMEOUT:")]
+        pcitems = [ln[7:] for ln in out.splitlines() if ln.startswith("PCITEM:")]
+        dest_ok = "DEST:ok" in out
         if not devs:
-            log.info("auto-pull: no Garmin device detected over USB")
+            if not dest_ok:
+                log.warning("auto-pull: inbox folder %s didn't resolve as a shell path", dest)
+            if pcitems:
+                log.info("auto-pull: no watch found (no GARMIN folder). 'This PC' shows: %s",
+                         ", ".join(pcitems))
+                log.info("auto-pull: make sure the Fenix is UNLOCKED and set to send files (MTP), "
+                         "not charge-only — then it appears here with a GARMIN folder.")
+            else:
+                log.info("auto-pull: no devices visible under 'This PC' at all")
         else:
             log.info("auto-pull: device(s) %s — copied %d, timed out %d",
                      ", ".join(devs), len(copied), len(timeouts))
